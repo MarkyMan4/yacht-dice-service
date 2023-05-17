@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -9,12 +10,30 @@ import (
 )
 
 type Server struct {
-	rooms map[string]map[*websocket.Conn]bool
+	rooms   map[string]map[*websocket.Conn]bool
+	players map[*websocket.Conn]*Player
+}
+
+type Event struct {
+	EventType string `json:"eventType"`
+
+	// event type determines which of these fields will be populated
+	Payload struct {
+		Name     string `json:"name"`
+		Die      int    `json:"die"`
+		Category int    `json:"category"`
+	} `json:"payload"`
+}
+
+type Player struct {
+	PlayerNum string // either p1 or p2
+	Nickname  string
 }
 
 func NewServer() *Server {
 	return &Server{
-		rooms: make(map[string]map[*websocket.Conn]bool),
+		rooms:   make(map[string]map[*websocket.Conn]bool),
+		players: make(map[*websocket.Conn]*Player),
 	}
 }
 
@@ -42,6 +61,12 @@ func (s *Server) handleWebSocket(ws *websocket.Conn) {
 	} else if !ok {
 		s.rooms[roomId] = make(map[*websocket.Conn]bool)
 		fmt.Println("new room created:", roomId)
+
+		// add person who created the room as player 1
+		s.players[ws] = &Player{PlayerNum: "p1"}
+	} else {
+		// else add the player as player 2
+		s.players[ws] = &Player{PlayerNum: "p2"}
 	}
 
 	s.rooms[roomId][ws] = true // possibly use a mutex instead here
@@ -71,7 +96,28 @@ func (s *Server) readLoop(ws *websocket.Conn, roomId string) {
 		}
 
 		msg := buf[:n]
+		s.handleEvent(msg, ws)
 		s.broadcast(msg, roomId)
+	}
+}
+
+// determine what to do based on event type, this will interact with a yacht dice game instance
+func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn) {
+	var e Event
+	// TODO handle errors when unmarshaling
+	json.Unmarshal(msg, &e)
+
+	switch e.EventType {
+	case "name":
+		// set the players name
+		s.players[fromConn].Nickname = e.Payload.Name
+		fmt.Println(s.players[fromConn])
+	case "roll":
+		fmt.Println("rolled")
+	case "keep":
+		fmt.Println(e.Payload.Die)
+	case "score":
+		fmt.Println(e.Payload.Category)
 	}
 }
 

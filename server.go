@@ -12,6 +12,7 @@ import (
 type Server struct {
 	rooms   map[string]map[*websocket.Conn]bool
 	players map[*websocket.Conn]*Player
+	games   map[string]*Game // map from room ID to game
 }
 
 type Event struct {
@@ -21,7 +22,7 @@ type Event struct {
 	Payload struct {
 		Name     string `json:"name"`
 		Die      int    `json:"die"`
-		Category int    `json:"category"`
+		Category string `json:"category"`
 	} `json:"payload"`
 }
 
@@ -34,6 +35,7 @@ func NewServer() *Server {
 	return &Server{
 		rooms:   make(map[string]map[*websocket.Conn]bool),
 		players: make(map[*websocket.Conn]*Player),
+		games:   make(map[string]*Game),
 	}
 }
 
@@ -64,9 +66,16 @@ func (s *Server) handleWebSocket(ws *websocket.Conn) {
 
 		// add person who created the room as player 1
 		s.players[ws] = &Player{PlayerNum: "p1"}
+
+		// create the game
+		s.games[roomId] = NewGame()
+		s.games[roomId].Player1 = s.players[ws]
 	} else {
 		// else add the player as player 2
 		s.players[ws] = &Player{PlayerNum: "p2"}
+
+		// add player 2 to the game
+		s.games[roomId].Player2 = s.players[ws]
 	}
 
 	s.rooms[roomId][ws] = true // possibly use a mutex instead here
@@ -96,22 +105,33 @@ func (s *Server) readLoop(ws *websocket.Conn, roomId string) {
 		}
 
 		msg := buf[:n]
-		s.handleEvent(msg, ws)
+		s.handleEvent(msg, ws, roomId)
 		s.broadcast(msg, roomId)
 	}
 }
 
 // determine what to do based on event type, this will interact with a yacht dice game instance
-func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn) {
+func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string) {
 	var e Event
 	// TODO handle errors when unmarshaling
 	json.Unmarshal(msg, &e)
 
+	// TODO handle event where player puts dice back into play
 	switch e.EventType {
 	case "name":
 		// set the players name
 		s.players[fromConn].Nickname = e.Payload.Name
-		fmt.Println(s.players[fromConn])
+
+		// if s.players[fromConn].PlayerNum == "p2" broadcast message with game state (i.e. start the game)
+		if s.players[fromConn].PlayerNum == "p2" {
+			gameData, err := json.Marshal(s.games[roomId])
+
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			s.broadcast(gameData, roomId)
+		}
 	case "roll":
 		fmt.Println("rolled")
 	case "keep":
@@ -122,6 +142,8 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn) {
 }
 
 func (s *Server) broadcast(b []byte, roomId string) {
+	// to include custom information for each player, I could marshal the game object,
+	// unmarshal it to a map[string]interface{}, add custom keys then marshal it again
 	for ws := range s.rooms[roomId] {
 		go func(ws *websocket.Conn) {
 			if _, err := ws.Write(b); err != nil {

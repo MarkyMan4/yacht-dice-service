@@ -27,8 +27,8 @@ type Event struct {
 }
 
 type Player struct {
-	PlayerNum string // either p1 or p2
-	Nickname  string
+	PlayerNum string `json:"playerNum"` // either p1 or p2
+	Nickname  string `json:"nickname"`
 }
 
 func NewServer() *Server {
@@ -106,7 +106,6 @@ func (s *Server) readLoop(ws *websocket.Conn, roomId string) {
 
 		msg := buf[:n]
 		s.handleEvent(msg, ws, roomId)
-		s.broadcast(msg, roomId)
 	}
 }
 

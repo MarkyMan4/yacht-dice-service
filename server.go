@@ -124,21 +124,27 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string
 
 		// if s.players[fromConn].PlayerNum == "p2" broadcast message with game state (i.e. start the game)
 		if s.players[fromConn].PlayerNum == "p2" {
-			gameData, err := json.Marshal(s.games[roomId])
-
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			s.broadcast(gameData, roomId)
+			s.broadcastGameToRoom(roomId)
 		}
 	case "roll":
-		fmt.Println("rolled")
+		s.games[roomId].rollDice()
+		s.broadcastGameToRoom(roomId)
 	case "keep":
-		fmt.Println(e.Payload.Die)
+		s.games[roomId].keepDie(e.Payload.Die)
+		s.broadcastGameToRoom(roomId)
 	case "score":
-		fmt.Println(e.Payload.Category)
+		s.games[roomId].scoreRoll(e.Payload.Category)
+		s.broadcastGameToRoom(roomId)
 	}
+}
+
+func (s *Server) broadcastGameToRoom(roomId string) {
+	gameData, err := json.Marshal(s.games[roomId])
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	s.broadcast(gameData, roomId)
 }
 
 func (s *Server) broadcast(b []byte, roomId string) {

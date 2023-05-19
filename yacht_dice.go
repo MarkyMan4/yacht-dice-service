@@ -77,7 +77,7 @@ func (g *Game) rollDice() {
 	// update score hints after roll
 }
 
-func (g *Game) keepDice(dice int) {
+func (g *Game) keepDie(dice int) {
 	g.DiceKept = append(g.DiceKept, dice)
 }
 

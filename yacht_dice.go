@@ -65,6 +65,10 @@ func NewGame() *Game {
 }
 
 func (g *Game) rollDice() {
+	if g.RollsLeft <= 0 {
+		return
+	}
+
 	// roll whatever dice are in play
 	roll := make([]int, len(g.DiceInPlay))
 
@@ -73,12 +77,43 @@ func (g *Game) rollDice() {
 	}
 
 	g.DiceInPlay = roll
+	g.RollsLeft--
 
 	// update score hints after roll
 }
 
-func (g *Game) keepDie(dice int) {
-	g.DiceKept = append(g.DiceKept, dice)
+func (g *Game) keepDie(index int) {
+	g.DiceKept = append(g.DiceKept, g.DiceInPlay[index])
+
+	// remove the kept die from the dice in play
+
+	newDiceInPlay := []int{}
+	for i := 0; i < len(g.DiceInPlay); i++ {
+		if i == index {
+			continue
+		}
+
+		newDiceInPlay = append(newDiceInPlay, g.DiceInPlay[i])
+	}
+
+	g.DiceInPlay = newDiceInPlay
+}
+
+func (g *Game) unkeepDie(index int) {
+	g.DiceInPlay = append(g.DiceInPlay, g.DiceKept[index])
+
+	// remove the kept die from the dice in play
+
+	newDiceKept := []int{}
+	for i := 0; i < len(g.DiceKept); i++ {
+		if i == index {
+			continue
+		}
+
+		newDiceKept = append(newDiceKept, g.DiceKept[i])
+	}
+
+	g.DiceKept = newDiceKept
 }
 
 func (g *Game) scoreNumberedDice(num int) int {

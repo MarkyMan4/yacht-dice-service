@@ -131,6 +131,9 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string
 	case "keep":
 		s.games[roomId].keepDie(e.Payload.Die)
 		s.broadcastGameToRoom(roomId)
+	case "unkeep":
+		s.games[roomId].unkeepDie(e.Payload.Die)
+		s.broadcastGameToRoom(roomId)
 	case "score":
 		s.games[roomId].scoreRoll(e.Payload.Category)
 		s.broadcastGameToRoom(roomId)

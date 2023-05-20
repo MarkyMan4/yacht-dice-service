@@ -26,6 +26,12 @@ type ScoreCard struct {
 
 // since the ints default to 0, the booleans tell whether the 0 is there actual score
 // or if the player just hasn't entered a score for that category yet
+
+// refactor idea: this could be a map like ScoreHints where I only store categories that have a score
+// I could have a map with the keys predefined and each key would map to a score function
+// then updating score hints would just be a matter of finding keys that aren't in playerscore map
+// also the score event handler would do something like PlayerScore[category] = categories[category]() - calling the score func
+// that would simplify how this data is consumed on the front end too, would reduce the repetive checks agains the Is<category>Score fields
 type PlayerScore struct {
 	Aces                 int  `json:"aces"`
 	IsAcesScore          bool `json:"isAcesScore"`
@@ -65,6 +71,7 @@ func NewGame() *Game {
 		DiceKept:   []int{},
 		DiceInPlay: []int{1, 1, 1, 1, 1},
 		Score:      &ScoreCard{Player1Score: &PlayerScore{}, Player2Score: &PlayerScore{}},
+		ScoreHints: make(map[string]int),
 	}
 }
 
@@ -84,6 +91,66 @@ func (g *Game) rollDice() {
 	g.RollsLeft--
 
 	// update score hints after roll
+	g.updateScoreHints()
+}
+
+func (g *Game) updateScoreHints() {
+	var scoreCard *PlayerScore
+
+	if g.Turn == "p1" {
+		scoreCard = g.Score.Player1Score
+	} else {
+		scoreCard = g.Score.Player2Score
+	}
+
+	if !scoreCard.IsAcesScore {
+		g.ScoreHints["aces"] = g.scoreNumberedDice(1)
+	}
+
+	if !scoreCard.IsDeucesScore {
+		g.ScoreHints["deuces"] = g.scoreNumberedDice(2)
+	}
+
+	if !scoreCard.IsThreesScore {
+		g.ScoreHints["threes"] = g.scoreNumberedDice(3)
+	}
+
+	if !scoreCard.IsFoursScore {
+		g.ScoreHints["fours"] = g.scoreNumberedDice(4)
+	}
+
+	if !scoreCard.IsFivesScore {
+		g.ScoreHints["fives"] = g.scoreNumberedDice(5)
+	}
+
+	if !scoreCard.IsSixesScore {
+		g.ScoreHints["sixes"] = g.scoreNumberedDice(6)
+	}
+
+	if !scoreCard.IsFourOfAKindScore {
+		g.ScoreHints["fourOfAKind"] = g.scoreFourOfAKind()
+	}
+
+	if !scoreCard.IsFullHouseScore {
+		g.ScoreHints["fullHouse"] = g.scoreFullHouse()
+	}
+
+	if !scoreCard.IsSmallStraightScore {
+		g.ScoreHints["smallStraight"] = g.scoreSmallStraight()
+	}
+
+	if !scoreCard.IsLargeStraightScore {
+		g.ScoreHints["largeStraight"] = g.scoreLargeStraight()
+	}
+
+	if !scoreCard.IsChanceScore {
+		g.ScoreHints["chance"] = g.scoreChance()
+	}
+
+	if !scoreCard.IsYachtScore {
+		g.ScoreHints["yacht"] = g.scoreYacht()
+	}
+
 }
 
 func (g *Game) keepDie(index int) {
@@ -157,6 +224,8 @@ func (g *Game) scoreFourOfAKind() int {
 }
 
 func (g *Game) scoreFullHouse() int {
+	// TODO there is a bug here, something like 2 2 2 3 5 caused a full house
+
 	// check if there are three one die and two of another
 	score := 0
 	allDice := append(g.DiceInPlay, g.DiceKept...)
@@ -165,9 +234,8 @@ func (g *Game) scoreFullHouse() int {
 	// with a sorted list, there are two ways to have a full house
 	// 1. die0 == die1 && die2 == die3 == die4
 	// 2. die0 == die1 == die2 && die3 == die4
-	if allDice[0] == allDice[1] &&
-		(allDice[0] == allDice[2] ||
-			(allDice[2] == allDice[3] && allDice[3] == allDice[4])) {
+	if (allDice[0] == allDice[1] && allDice[2] == allDice[3] && allDice[3] == allDice[4]) ||
+		(allDice[0] == allDice[1] && allDice[1] == allDice[2] && allDice[3] == allDice[4]) {
 		score = 25
 	}
 
@@ -303,4 +371,7 @@ func (g *Game) scoreRoll(category string) {
 
 	// reset rolls left
 	g.RollsLeft = 3
+
+	// reset score hints
+	g.ScoreHints = make(map[string]int)
 }

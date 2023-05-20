@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"golang.org/x/net/websocket"
@@ -45,24 +45,24 @@ func (s *Server) handleWebSocket(ws *websocket.Conn) {
 	urlParts := strings.Split(ws.Request().URL.Path, "/")
 
 	if len(urlParts) != 3 || len(strings.Trim(urlParts[2], " ")) == 0 {
-		fmt.Println(len(urlParts))
-		fmt.Println("invalid URL:", ws.Request().URL.Path)
+		log.Println(len(urlParts))
+		log.Println("invalid URL:", ws.Request().URL.Path)
 		ws.Close()
 		return
 	}
 
 	roomId := urlParts[2]
-	fmt.Println("new incoming connection from client:", ws.RemoteAddr())
-	fmt.Println("room ID:", roomId)
+	log.Println("new incoming connection from client:", ws.RemoteAddr())
+	log.Println("room ID:", roomId)
 
 	// if the room ID exists and there are already 2 people in it, don't allow to join
 	if _, ok := s.rooms[roomId]; ok && len(s.rooms[roomId]) >= 2 {
-		fmt.Printf("room %s is full\n", roomId)
+		log.Printf("room %s is full\n", roomId)
 		ws.Close()
 		return
 	} else if !ok {
 		s.rooms[roomId] = make(map[*websocket.Conn]bool)
-		fmt.Println("new room created:", roomId)
+		log.Println("new room created:", roomId)
 
 		// add person who created the room as player 1
 		s.players[ws] = &Player{PlayerNum: "p1"}
@@ -94,13 +94,13 @@ func (s *Server) readLoop(ws *websocket.Conn, roomId string) {
 				// if no one left in the room, delete the room
 				if len(s.rooms[roomId]) == 0 {
 					delete(s.rooms, roomId)
-					fmt.Printf("room %s deleted", roomId)
+					log.Printf("room %s deleted", roomId)
 				}
 
 				break
 			}
 
-			fmt.Println("read error:", err)
+			log.Println("read error:", err)
 			continue
 		}
 
@@ -143,7 +143,7 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string
 func (s *Server) broadcastGameToRoom(roomId string) {
 	gameData, err := json.Marshal(s.games[roomId])
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
 	s.broadcast(gameData, roomId)
@@ -155,7 +155,7 @@ func (s *Server) broadcast(b []byte, roomId string) {
 	for ws := range s.rooms[roomId] {
 		go func(ws *websocket.Conn) {
 			if _, err := ws.Write(b); err != nil {
-				fmt.Println("write error:", err)
+				log.Println("write error:", err)
 			}
 		}(ws)
 	}

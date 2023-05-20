@@ -3,6 +3,7 @@ package main
 import (
 	"math/rand"
 	"sort"
+	"time"
 )
 
 type Game struct {
@@ -53,6 +54,9 @@ type PlayerScore struct {
 }
 
 func NewGame() *Game {
+	// seed the RNG
+	rand.Seed(time.Now().UnixNano())
+
 	// score card data defualts to 0
 	return &Game{
 		Round:      1,
@@ -120,7 +124,7 @@ func (g *Game) scoreNumberedDice(num int) int {
 	allDice := append(g.DiceInPlay, g.DiceKept...)
 	score := 0
 
-	for die := range allDice {
+	for _, die := range allDice {
 		if die == num {
 			score += num
 		}
@@ -144,7 +148,7 @@ func (g *Game) scoreFourOfAKind() int {
 
 	// if they have four of a kind, score is the sum of all dice
 	if hasFourOfAKind {
-		for die := range allDice {
+		for _, die := range allDice {
 			score += die
 		}
 	}
@@ -176,13 +180,13 @@ func (g *Game) scoreSmallStraight() int {
 	allDice := append(g.DiceInPlay, g.DiceKept...)
 	sort.Ints(allDice)
 
-	numInARow := 0
+	numInARow := 1
 
 	for i := 1; i < len(allDice); i++ {
 		if allDice[i] == allDice[i-1]+1 {
 			numInARow++
 		} else {
-			numInARow = 0
+			numInARow = 1
 		}
 
 		if numInARow == 4 {
@@ -215,7 +219,7 @@ func (g *Game) scoreChance() int {
 	score := 0
 	allDice := append(g.DiceInPlay, g.DiceKept...)
 
-	for die := range allDice {
+	for _, die := range allDice {
 		score += die
 	}
 
@@ -292,4 +296,11 @@ func (g *Game) scoreRoll(category string) {
 		// round increments when we come back to player 1
 		g.Round++
 	}
+
+	// put all dice back in play
+	g.DiceInPlay = append(g.DiceInPlay, g.DiceKept...)
+	g.DiceKept = []int{}
+
+	// reset rolls left
+	g.RollsLeft = 3
 }

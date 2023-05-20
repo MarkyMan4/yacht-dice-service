@@ -242,16 +242,34 @@ func (g *Game) scoreFullHouse() int {
 	return score
 }
 
+func arrContains(arr []int, val int) bool {
+	for i := range arr {
+		if arr[i] == val {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (g *Game) scoreSmallStraight() int {
 	// four consecutive numbers
 	score := 0
 	allDice := append(g.DiceInPlay, g.DiceKept...)
 	sort.Ints(allDice)
 
+	// only look at unique dice, other wise 1 2 2 3 4 wouldn't count using the logic below
+	uniqueDice := []int{}
+	for _, die := range allDice {
+		if !arrContains(uniqueDice, die) {
+			uniqueDice = append(uniqueDice, die)
+		}
+	}
+
 	numInARow := 1
 
-	for i := 1; i < len(allDice); i++ {
-		if allDice[i] == allDice[i-1]+1 {
+	for i := 1; i < len(uniqueDice); i++ {
+		if uniqueDice[i] == uniqueDice[i-1]+1 {
 			numInARow++
 		} else {
 			numInARow = 1

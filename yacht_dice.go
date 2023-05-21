@@ -2,62 +2,55 @@ package main
 
 import (
 	"math/rand"
-	"sort"
 	"time"
 )
 
+type scoreFunc func(dice []int) int
+
+var categories map[string]scoreFunc = map[string]scoreFunc{
+	"aces":          scoreAces,
+	"deuces":        scoreDeuces,
+	"threes":        scoreThrees,
+	"fours":         scoreFours,
+	"fives":         scoreFives,
+	"sixes":         scoreSixes,
+	"fourOfAKind":   scoreFourOfAKind,
+	"fullHouse":     scoreFullHouse,
+	"smallStraight": scoreSmallStraight,
+	"largeStraight": scoreLargeStraight,
+	"chance":        scoreChance,
+	"yacht":         scoreYacht,
+}
+
 type Game struct {
 	Round      int            `json:"round"`
-	Winner     string         `json:"winner"` // "p1" or "p2", game is over if this is not null
-	Turn       string         `json:"turn"`   // "p1" or "p2"
+	Turn       string         `json:"turn"` // "p1" or "p2"
 	Player1    *Player        `json:"p1"`
 	Player2    *Player        `json:"p2"`
 	RollsLeft  int            `json:"rollsLeft"`
 	DiceKept   []int          `json:"diceKept"`
 	DiceInPlay []int          `json:"diceInPlay"`
-	Score      *ScoreCard     `json:"scoreCard"`
+	ScoreCard  *PlayerScores  `json:"scoreCard"`
 	ScoreHints map[string]int `json:"scoreHints"` // only populated with possible selections
+	Winner     string         `json:"winner"`     // "p1" or "p2", game is over if this is not null
+	Totals     *PlayerTotals  `json:"totals"`
 }
 
-type ScoreCard struct {
-	Player1Score *PlayerScore `json:"p1"`
-	Player2Score *PlayerScore `json:"p2"`
+type PlayerScores struct {
+	Player1Score map[string]int `json:"p1"`
+	Player2Score map[string]int `json:"p2"`
 }
 
-// since the ints default to 0, the booleans tell whether the 0 is there actual score
-// or if the player just hasn't entered a score for that category yet
+type PlayerTotals struct {
+	Player1Total int `json:"p1"`
+	Player2Total int `json:"p2"`
+}
 
 // refactor idea: this could be a map like ScoreHints where I only store categories that have a score
 // I could have a map with the keys predefined and each key would map to a score function
 // then updating score hints would just be a matter of finding keys that aren't in playerscore map
 // also the score event handler would do something like PlayerScore[category] = categories[category]() - calling the score func
 // that would simplify how this data is consumed on the front end too, would reduce the repetive checks agains the Is<category>Score fields
-type PlayerScore struct {
-	Aces                 int  `json:"aces"`
-	IsAcesScore          bool `json:"isAcesScore"`
-	Deuces               int  `json:"deuces"`
-	IsDeucesScore        bool `json:"isDeucesScore"`
-	Threes               int  `json:"threes"`
-	IsThreesScore        bool `json:"isThreesScore"`
-	Fours                int  `json:"fours"`
-	IsFoursScore         bool `json:"isFoursScore"`
-	Fives                int  `json:"fives"`
-	IsFivesScore         bool `json:"isFivesScore"`
-	Sixes                int  `json:"sixes"`
-	IsSixesScore         bool `json:"isSixesScore"`
-	FourOfAKind          int  `json:"fourOfAKind"`
-	IsFourOfAKindScore   bool `json:"isFourOfAKindScore"`
-	FullHouse            int  `json:"fullHouse"`
-	IsFullHouseScore     bool `json:"isFullHouseScore"`
-	SmallStraight        int  `json:"smallStraight"`
-	IsSmallStraightScore bool `json:"isSmallStraightScore"`
-	LargeStraight        int  `json:"largeStraight"`
-	IsLargeStraightScore bool `json:"isLargeStraightScore"`
-	Chance               int  `json:"chance"`
-	IsChanceScore        bool `json:"isChanceScore"`
-	Yacht                int  `json:"yacht"`
-	IsYachtScore         bool `json:"isYachtScore"`
-}
 
 func NewGame() *Game {
 	// seed the RNG
@@ -70,8 +63,12 @@ func NewGame() *Game {
 		RollsLeft:  3,
 		DiceKept:   []int{},
 		DiceInPlay: []int{1, 1, 1, 1, 1},
-		Score:      &ScoreCard{Player1Score: &PlayerScore{}, Player2Score: &PlayerScore{}},
+		ScoreCard: &PlayerScores{
+			Player1Score: make(map[string]int),
+			Player2Score: make(map[string]int),
+		},
 		ScoreHints: make(map[string]int),
+		Totals:     &PlayerTotals{},
 	}
 }
 
@@ -95,62 +92,21 @@ func (g *Game) rollDice() {
 }
 
 func (g *Game) updateScoreHints() {
-	var scoreCard *PlayerScore
+	var scoreCard map[string]int
 
 	if g.Turn == "p1" {
-		scoreCard = g.Score.Player1Score
+		scoreCard = g.ScoreCard.Player1Score
 	} else {
-		scoreCard = g.Score.Player2Score
+		scoreCard = g.ScoreCard.Player2Score
 	}
 
-	if !scoreCard.IsAcesScore {
-		g.ScoreHints["aces"] = g.scoreNumberedDice(1)
+	for cat := range categories {
+		// if the category is not in scores, add a score hing
+		if _, ok := scoreCard[cat]; !ok {
+			allDice := append(g.DiceInPlay, g.DiceKept...)
+			g.ScoreHints[cat] = categories[cat](allDice)
+		}
 	}
-
-	if !scoreCard.IsDeucesScore {
-		g.ScoreHints["deuces"] = g.scoreNumberedDice(2)
-	}
-
-	if !scoreCard.IsThreesScore {
-		g.ScoreHints["threes"] = g.scoreNumberedDice(3)
-	}
-
-	if !scoreCard.IsFoursScore {
-		g.ScoreHints["fours"] = g.scoreNumberedDice(4)
-	}
-
-	if !scoreCard.IsFivesScore {
-		g.ScoreHints["fives"] = g.scoreNumberedDice(5)
-	}
-
-	if !scoreCard.IsSixesScore {
-		g.ScoreHints["sixes"] = g.scoreNumberedDice(6)
-	}
-
-	if !scoreCard.IsFourOfAKindScore {
-		g.ScoreHints["fourOfAKind"] = g.scoreFourOfAKind()
-	}
-
-	if !scoreCard.IsFullHouseScore {
-		g.ScoreHints["fullHouse"] = g.scoreFullHouse()
-	}
-
-	if !scoreCard.IsSmallStraightScore {
-		g.ScoreHints["smallStraight"] = g.scoreSmallStraight()
-	}
-
-	if !scoreCard.IsLargeStraightScore {
-		g.ScoreHints["largeStraight"] = g.scoreLargeStraight()
-	}
-
-	if !scoreCard.IsChanceScore {
-		g.ScoreHints["chance"] = g.scoreChance()
-	}
-
-	if !scoreCard.IsYachtScore {
-		g.ScoreHints["yacht"] = g.scoreYacht()
-	}
-
 }
 
 func (g *Game) keepDie(index int) {
@@ -187,190 +143,61 @@ func (g *Game) unkeepDie(index int) {
 	g.DiceKept = newDiceKept
 }
 
-func (g *Game) scoreNumberedDice(num int) int {
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-	score := 0
+func (g *Game) updatePlayerTotals() {
+	p1Total := 0
+	p2Total := 0
 
-	for _, die := range allDice {
-		if die == num {
-			score += num
-		}
+	for _, v := range g.ScoreCard.Player1Score {
+		p1Total += v
 	}
 
-	return score
+	for _, v := range g.ScoreCard.Player2Score {
+		p2Total += v
+	}
+
+	g.Totals.Player1Total = p1Total
+	g.Totals.Player2Total = p2Total
 }
 
-func (g *Game) scoreFourOfAKind() int {
-	// check if there are four dice of the same number
-	score := 0
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-	hasFourOfAKind := false
-
-	// check four of a kind by getting score for each number
-	if g.scoreNumberedDice(1) == 4 || g.scoreNumberedDice(2) == 8 ||
-		g.scoreNumberedDice(3) == 12 || g.scoreNumberedDice(4) == 16 ||
-		g.scoreNumberedDice(5) == 20 || g.scoreNumberedDice(6) == 24 {
-		hasFourOfAKind = true
+func (g *Game) endGame() {
+	// determine the winner and end the game
+	if g.Totals.Player1Total > g.Totals.Player2Total {
+		g.Winner = "p1"
+	} else if g.Totals.Player2Total > g.Totals.Player1Total {
+		g.Winner = "p2"
+	} else {
+		g.Winner = "tie"
 	}
 
-	// if they have four of a kind, score is the sum of all dice
-	if hasFourOfAKind {
-		for _, die := range allDice {
-			score += die
-		}
-	}
-
-	return score
-}
-
-func (g *Game) scoreFullHouse() int {
-	// TODO there is a bug here, something like 2 2 2 3 5 caused a full house
-
-	// check if there are three one die and two of another
-	score := 0
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-	sort.Ints(allDice)
-
-	// with a sorted list, there are two ways to have a full house
-	// 1. die0 == die1 && die2 == die3 == die4
-	// 2. die0 == die1 == die2 && die3 == die4
-	if (allDice[0] == allDice[1] && allDice[2] == allDice[3] && allDice[3] == allDice[4]) ||
-		(allDice[0] == allDice[1] && allDice[1] == allDice[2] && allDice[3] == allDice[4]) {
-		score = 25
-	}
-
-	return score
-}
-
-func arrContains(arr []int, val int) bool {
-	for i := range arr {
-		if arr[i] == val {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (g *Game) scoreSmallStraight() int {
-	// four consecutive numbers
-	score := 0
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-	sort.Ints(allDice)
-
-	// only look at unique dice, other wise 1 2 2 3 4 wouldn't count using the logic below
-	uniqueDice := []int{}
-	for _, die := range allDice {
-		if !arrContains(uniqueDice, die) {
-			uniqueDice = append(uniqueDice, die)
-		}
-	}
-
-	numInARow := 1
-
-	for i := 1; i < len(uniqueDice); i++ {
-		if uniqueDice[i] == uniqueDice[i-1]+1 {
-			numInARow++
-		} else {
-			numInARow = 1
-		}
-
-		if numInARow == 4 {
-			score = 30
-			break
-		}
-	}
-
-	return score
-}
-
-func (g *Game) scoreLargeStraight() int {
-	// five consecutive numbers
-	score := 40
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-	sort.Ints(allDice)
-
-	for i := 1; i < len(allDice); i++ {
-		if allDice[i] != allDice[i-1]+1 {
-			score = 0
-			break
-		}
-	}
-
-	return score
-}
-
-func (g *Game) scoreChance() int {
-	// sum of all dice
-	score := 0
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-
-	for _, die := range allDice {
-		score += die
-	}
-
-	return score
-}
-
-func (g *Game) scoreYacht() int {
-	// five of a kind
-	score := 0
-	allDice := append(g.DiceInPlay, g.DiceKept...)
-
-	if allDice[0] == allDice[1] && allDice[1] == allDice[2] &&
-		allDice[2] == allDice[3] && allDice[3] == allDice[4] {
-		score = 50
-	}
-
-	return score
+	g.DiceInPlay = []int{}
+	g.DiceKept = []int{}
 }
 
 func (g *Game) scoreRoll(category string) {
-	var scoreCard *PlayerScore
+	var scoreCard map[string]int
 
 	if g.Turn == "p1" {
-		scoreCard = g.Score.Player1Score
+		scoreCard = g.ScoreCard.Player1Score
 	} else {
-		scoreCard = g.Score.Player2Score
+		scoreCard = g.ScoreCard.Player2Score
 	}
 
-	switch category {
-	case "aces":
-		scoreCard.Aces = g.scoreNumberedDice(1)
-		scoreCard.IsAcesScore = true
-	case "deuces":
-		scoreCard.Deuces = g.scoreNumberedDice(2)
-		scoreCard.IsDeucesScore = true
-	case "threes":
-		scoreCard.Threes = g.scoreNumberedDice(3)
-		scoreCard.IsThreesScore = true
-	case "fours":
-		scoreCard.Fours = g.scoreNumberedDice(4)
-		scoreCard.IsFoursScore = true
-	case "fives":
-		scoreCard.Fives = g.scoreNumberedDice(5)
-		scoreCard.IsFivesScore = true
-	case "sixes":
-		scoreCard.Sixes = g.scoreNumberedDice(6)
-		scoreCard.IsSixesScore = true
-	case "fourOfAKind":
-		scoreCard.FourOfAKind = g.scoreFourOfAKind()
-		scoreCard.IsFourOfAKindScore = true
-	case "fullHouse":
-		scoreCard.FullHouse = g.scoreFullHouse()
-		scoreCard.IsFullHouseScore = true
-	case "smallStraight":
-		scoreCard.SmallStraight = g.scoreSmallStraight()
-		scoreCard.IsSmallStraightScore = true
-	case "largeStraight":
-		scoreCard.LargeStraight = g.scoreLargeStraight()
-		scoreCard.IsLargeStraightScore = true
-	case "chance":
-		scoreCard.Chance = g.scoreChance()
-		scoreCard.IsChanceScore = true
-	case "yacht":
-		scoreCard.Yacht = g.scoreYacht()
-		scoreCard.IsYachtScore = true
+	scorer, categoryExists := categories[category]
+	_, hasScore := scoreCard[category]
+
+	// make sure the value in the event is a valid catetory
+	// also make sure the player doesn't already have a score for that category
+	if categoryExists && !hasScore {
+		allDice := append(g.DiceInPlay, g.DiceKept...)
+		scoreCard[category] = scorer(allDice)
+	}
+
+	g.updatePlayerTotals()
+
+	// if that was the last round (12), determine the winner
+	if g.Round == 12 && g.Turn == "p2" {
+		g.endGame()
+		return
 	}
 
 	// switch turns

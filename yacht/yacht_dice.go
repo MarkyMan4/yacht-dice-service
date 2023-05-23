@@ -1,4 +1,4 @@
-package main
+package yacht
 
 import (
 	"math/rand"
@@ -34,6 +34,11 @@ type Game struct {
 	ScoreHints map[string]int `json:"scoreHints"` // only populated with possible selections
 	Winner     string         `json:"winner"`     // "p1" or "p2", game is over if this is not null
 	Totals     *PlayerTotals  `json:"totals"`
+}
+
+type Player struct {
+	PlayerNum string `json:"playerNum"` // either p1 or p2
+	Nickname  string `json:"nickname"`
 }
 
 type PlayerScores struct {
@@ -72,7 +77,7 @@ func NewGame() *Game {
 	}
 }
 
-func (g *Game) rollDice() {
+func (g *Game) RollDice() {
 	if g.RollsLeft <= 0 {
 		return
 	}
@@ -109,7 +114,7 @@ func (g *Game) updateScoreHints() {
 	}
 }
 
-func (g *Game) keepDie(index int) {
+func (g *Game) KeepDie(index int) {
 	g.DiceKept = append(g.DiceKept, g.DiceInPlay[index])
 
 	// remove the kept die from the dice in play
@@ -126,7 +131,7 @@ func (g *Game) keepDie(index int) {
 	g.DiceInPlay = newDiceInPlay
 }
 
-func (g *Game) unkeepDie(index int) {
+func (g *Game) UnkeepDie(index int) {
 	g.DiceInPlay = append(g.DiceInPlay, g.DiceKept[index])
 
 	// remove the kept die from the dice in play
@@ -173,7 +178,7 @@ func (g *Game) endGame() {
 	g.DiceKept = []int{}
 }
 
-func (g *Game) scoreRoll(category string) {
+func (g *Game) ScoreRoll(category string) {
 	var scoreCard map[string]int
 
 	if g.Turn == "p1" {

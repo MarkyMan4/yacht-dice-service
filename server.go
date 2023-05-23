@@ -6,13 +6,14 @@ import (
 	"log"
 	"strings"
 
+	"github.com/MarkyMan4/yacht-dice-service/yacht"
 	"golang.org/x/net/websocket"
 )
 
 type Server struct {
 	rooms   map[string]map[*websocket.Conn]bool
-	players map[*websocket.Conn]*Player
-	games   map[string]*Game // map from room ID to game
+	players map[*websocket.Conn]*yacht.Player
+	games   map[string]*yacht.Game // map from room ID to game
 }
 
 type Event struct {
@@ -26,16 +27,11 @@ type Event struct {
 	} `json:"payload"`
 }
 
-type Player struct {
-	PlayerNum string `json:"playerNum"` // either p1 or p2
-	Nickname  string `json:"nickname"`
-}
-
 func NewServer() *Server {
 	return &Server{
 		rooms:   make(map[string]map[*websocket.Conn]bool),
-		players: make(map[*websocket.Conn]*Player),
-		games:   make(map[string]*Game),
+		players: make(map[*websocket.Conn]*yacht.Player),
+		games:   make(map[string]*yacht.Game),
 	}
 }
 
@@ -65,14 +61,14 @@ func (s *Server) handleWebSocket(ws *websocket.Conn) {
 		log.Println("new room created:", roomId)
 
 		// add person who created the room as player 1
-		s.players[ws] = &Player{PlayerNum: "p1"}
+		s.players[ws] = &yacht.Player{PlayerNum: "p1"}
 
 		// create the game
-		s.games[roomId] = NewGame()
+		s.games[roomId] = yacht.NewGame()
 		s.games[roomId].Player1 = s.players[ws]
 	} else {
 		// else add the player as player 2
-		s.players[ws] = &Player{PlayerNum: "p2"}
+		s.players[ws] = &yacht.Player{PlayerNum: "p2"}
 
 		// add player 2 to the game
 		s.games[roomId].Player2 = s.players[ws]
@@ -126,16 +122,16 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string
 			s.broadcastGameToRoom(roomId)
 		}
 	case "roll":
-		s.games[roomId].rollDice()
+		s.games[roomId].RollDice()
 		s.broadcastGameToRoom(roomId)
 	case "keep":
-		s.games[roomId].keepDie(e.Payload.Die)
+		s.games[roomId].KeepDie(e.Payload.Die)
 		s.broadcastGameToRoom(roomId)
 	case "unkeep":
-		s.games[roomId].unkeepDie(e.Payload.Die)
+		s.games[roomId].UnkeepDie(e.Payload.Die)
 		s.broadcastGameToRoom(roomId)
 	case "score":
-		s.games[roomId].scoreRoll(e.Payload.Category)
+		s.games[roomId].ScoreRoll(e.Payload.Category)
 		s.broadcastGameToRoom(roomId)
 	}
 }

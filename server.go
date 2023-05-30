@@ -84,13 +84,14 @@ func (s *Server) readLoop(ws *websocket.Conn, roomId string) {
 		n, err := ws.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				// remove connection once closed by client
+				// remove connection and player once closed by client
 				delete(s.rooms[roomId], ws)
+				delete(s.players, ws)
 
 				// if no one left in the room, delete the room
 				if len(s.rooms[roomId]) == 0 {
 					delete(s.rooms, roomId)
-					log.Printf("room %s deleted", roomId)
+					log.Printf("room %s deleted\n", roomId)
 				}
 
 				break

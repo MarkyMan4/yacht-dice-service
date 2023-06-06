@@ -22,18 +22,33 @@ var categories map[string]scoreFunc = map[string]scoreFunc{
 	"yacht":         scoreYacht,
 }
 
+var upperCategories []string = []string{
+	"aces",
+	"deuces",
+	"threes",
+	"fours",
+	"fives",
+	"sixes",
+}
+
+const (
+	BONUS_MIN   = 63
+	BONUS_SCORE = 35
+)
+
 type Game struct {
-	Round      int            `json:"round"`
-	Turn       string         `json:"turn"` // "p1" or "p2"
-	Player1    *Player        `json:"p1"`
-	Player2    *Player        `json:"p2"`
-	RollsLeft  int            `json:"rollsLeft"`
-	DiceKept   []int          `json:"diceKept"`
-	DiceInPlay []int          `json:"diceInPlay"`
-	ScoreCard  *PlayerScores  `json:"scoreCard"`
-	ScoreHints map[string]int `json:"scoreHints"` // only populated with possible selections
-	Winner     string         `json:"winner"`     // "p1" or "p2", game is over if this is not null
-	Totals     *PlayerTotals  `json:"totals"`
+	Round       int            `json:"round"`
+	Turn        string         `json:"turn"` // "p1" or "p2"
+	Player1     *Player        `json:"p1"`
+	Player2     *Player        `json:"p2"`
+	RollsLeft   int            `json:"rollsLeft"`
+	DiceKept    []int          `json:"diceKept"`
+	DiceInPlay  []int          `json:"diceInPlay"`
+	ScoreCard   *PlayerScores  `json:"scoreCard"`
+	ScoreHints  map[string]int `json:"scoreHints"`  // only populated with possible selections
+	Winner      string         `json:"winner"`      // "p1" or "p2", game is over if this is not null
+	UpperTotals *PlayerTotals  `json:"upperTotals"` // totals for aces through sixes
+	Totals      *PlayerTotals  `json:"totals"`
 }
 
 type Player struct {
@@ -72,8 +87,9 @@ func NewGame() *Game {
 			Player1Score: make(map[string]int),
 			Player2Score: make(map[string]int),
 		},
-		ScoreHints: make(map[string]int),
-		Totals:     &PlayerTotals{},
+		ScoreHints:  make(map[string]int),
+		UpperTotals: &PlayerTotals{},
+		Totals:      &PlayerTotals{},
 	}
 }
 
@@ -96,7 +112,8 @@ func (g *Game) RollDice() {
 	g.updateScoreHints()
 }
 
-func (g *Game) updateScoreHints() {
+func (g *Game) getCurrentScoreCard() map[string]int {
+	// get the scorecard for whoever's turn it currently is
 	var scoreCard map[string]int
 
 	if g.Turn == "p1" {
@@ -105,12 +122,64 @@ func (g *Game) updateScoreHints() {
 		scoreCard = g.ScoreCard.Player2Score
 	}
 
+	return scoreCard
+}
+
+func (g *Game) updateScoreHints() {
+	scoreCard := g.getCurrentScoreCard()
+
 	for cat := range categories {
-		// if the category is not in scores, add a score hing
+		// if the category is not in scores, add a score hint
 		if _, ok := scoreCard[cat]; !ok {
 			allDice := append(g.DiceInPlay, g.DiceKept...)
 			g.ScoreHints[cat] = categories[cat](allDice)
 		}
+	}
+}
+
+func (g *Game) hasScoredUpperCategories() bool {
+	// check if the player has entered a score for all the upper categories
+	scoreCard := g.getCurrentScoreCard()
+
+	for _, cat := range upperCategories {
+		if _, ok := scoreCard[cat]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (g *Game) calcUpperTotal() {
+	// sum of aces through sixes total, assumes player has a total for all six categories
+	total := 0
+	scoreCard := g.getCurrentScoreCard()
+
+	for _, cat := range upperCategories {
+		total += scoreCard[cat]
+	}
+
+	if g.Turn == "p1" {
+		g.UpperTotals.Player1Total = total
+	} else {
+		g.UpperTotals.Player2Total = total
+	}
+}
+
+func (g *Game) calcBonus() {
+	scoreCard := g.getCurrentScoreCard()
+	var total int
+
+	if g.Turn == "p1" {
+		total = g.UpperTotals.Player1Total
+	} else {
+		total = g.UpperTotals.Player2Total
+	}
+
+	if total >= BONUS_MIN {
+		scoreCard["bonus"] = BONUS_SCORE
+	} else {
+		scoreCard["bonus"] = 0
 	}
 }
 
@@ -179,13 +248,7 @@ func (g *Game) endGame() {
 }
 
 func (g *Game) ScoreRoll(category string) {
-	var scoreCard map[string]int
-
-	if g.Turn == "p1" {
-		scoreCard = g.ScoreCard.Player1Score
-	} else {
-		scoreCard = g.ScoreCard.Player2Score
-	}
+	scoreCard := g.getCurrentScoreCard()
 
 	scorer, categoryExists := categories[category]
 	_, hasScore := scoreCard[category]
@@ -195,6 +258,14 @@ func (g *Game) ScoreRoll(category string) {
 	if categoryExists && !hasScore {
 		allDice := append(g.DiceInPlay, g.DiceKept...)
 		scoreCard[category] = scorer(allDice)
+	}
+
+	g.calcUpperTotal()
+
+	// if the player doesn't have their bonus score and they've entered a score for
+	// aces through sixes, set the bonus
+	if _, ok := scoreCard["bonus"]; !ok && g.hasScoredUpperCategories() {
+		g.calcBonus()
 	}
 
 	g.updatePlayerTotals()

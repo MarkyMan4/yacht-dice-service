@@ -134,6 +134,9 @@ func (s *Server) handleEvent(msg []byte, fromConn *websocket.Conn, roomId string
 	case "score":
 		s.games[roomId].ScoreRoll(e.Payload.Category)
 		s.broadcastGameToRoom(roomId)
+	case "restart":
+		s.games[roomId].Reset()
+		s.broadcastGameToRoom(roomId)
 	}
 }
 

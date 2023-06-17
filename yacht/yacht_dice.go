@@ -296,3 +296,18 @@ func (g *Game) ScoreRoll(category string) {
 	// reset score hints
 	g.ScoreHints = make(map[string]int)
 }
+
+func (g *Game) Reset() {
+	g.Round = 1
+	g.Turn = "p1"
+	g.RollsLeft = 3
+	g.DiceKept = []int{}
+	g.DiceInPlay = []int{1, 1, 1, 1, 1}
+	g.ScoreCard = &PlayerScores{
+		Player1Score: make(map[string]int),
+		Player2Score: make(map[string]int),
+	}
+	g.ScoreHints = make(map[string]int)
+	g.UpperTotals = &PlayerTotals{}
+	g.Totals = &PlayerTotals{}
+}

@@ -308,6 +308,7 @@ func (g *Game) Reset() {
 		Player2Score: make(map[string]int),
 	}
 	g.ScoreHints = make(map[string]int)
+	g.Winner = ""
 	g.UpperTotals = &PlayerTotals{}
 	g.Totals = &PlayerTotals{}
 }
